@@ -10,6 +10,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <pthread.h>
 
 #include <math.h>
@@ -17,7 +18,7 @@
 #define GLFW_INCLUDE_GLU
 #include <GLFW/glfw3.h>
 
- GLFWwindow* gr_window;
+GLFWwindow* gr_window;
 /*
 #include <OpenGL/OpenGL.h>
 #include <OpenGL/gl.h>
@@ -169,50 +170,47 @@ void* calc(void* threadid)
 	int id = (int)threadid;
 	int x;
 	int y;
-	int i;
-	double cy=0.00001;
-	//double *pr = malloc(ITERATIONS*sizeof(double));
-	//double *pi = malloc(ITERATIONS*sizeof(double));
-	for (x=id; x<WIDTH2; x+=NUM_THREADS)
+
+	if (id & 1 == 0 || NUM_THREADS == 1)
 	{
-		double xd = ((double)x)*DX2 +XMIN;
-
-		printf("%d: x=%d/%f, %f done\n", id, x, (xd-XMIN)/DX2, (double)x/WIDTH2);
-		//screen[(y/DETAIL*2*WIDTH)*3+id]=255;
-		//printf("x=%d\n", x);
-
-		for (y=0; y<HEIGHT2; y+=STRIDE)
+		for (x=(id/2); x<WIDTH2; x+=(NUM_THREADS/2))
 		{
-			double yd = ((double)y)*DY2 + YMIN;
-			double lefty = yd;
-			double righty = yd + DY*STRIDE;
-			if ((FUNC(xd, lefty) > 0) != (FUNC(xd, righty) >= 0))
+			double xd = ((double)x)*DX2 +XMIN;
+
+			printf("%d: x=%d/%f, %f done\n", id, x, (xd-XMIN)/DX2, (double)x/WIDTH2);
+
+			for (y=0; y<HEIGHT2; y+=STRIDE)
 			{
-				binsearch_y(xd, lefty, righty);
+				double yd = ((double)y)*DY2 + YMIN;
+				double lefty = yd;
+				double righty = yd + DY*STRIDE;
+				if ((FUNC(xd, lefty) > 0) != (FUNC(xd, righty) >= 0))
+				{
+					binsearch_y(xd, lefty, righty);
+				}
 			}
 		}
-		
 	}
-
-	for (y=id; y<WIDTH2; y+=NUM_THREADS)
+	
+	if (id & 1 == 1 || NUM_THREADS == 1)
 	{
-		double yd = ((double)y)*DY2 +YMIN;
-
-		printf("%d: y=%d/%f, %f done\n", id, y, (yd-YMIN)/DY2, (double)y/HEIGHT2);
-		//screen[(y/DETAIL*2*WIDTH)*3+id]=255;
-		//printf("x=%d\n", x);
-
-		for (x=0; x<WIDTH2; x+=STRIDE)
+		for (y=(id/2); y<WIDTH2; y+=(NUM_THREADS/2))
 		{
-			double xd = ((double)x)*DX2 + XMIN;
-			double leftx = xd;
-			double rightx = xd + DX*STRIDE;
-			if ((FUNC(leftx, yd) > 0) != (FUNC(rightx, yd) >= 0))
+			double yd = ((double)y)*DY2 +YMIN;
+
+			printf("%d: y=%d/%f, %f done\n", id, y, (yd-YMIN)/DY2, (double)y/HEIGHT2);
+
+			for (x=0; x<WIDTH2; x+=STRIDE)
 			{
-				binsearch_x(leftx, rightx, yd);
+				double xd = ((double)x)*DX2 + XMIN;
+				double leftx = xd;
+				double rightx = xd + DX*STRIDE;
+				if ((FUNC(leftx, yd) > 0) != (FUNC(rightx, yd) >= 0))
+				{
+					binsearch_x(leftx, rightx, yd);
+				}
 			}
 		}
-		
 	}
 	printf("Thread %d quitting!\n", id);
 	pthread_exit(NULL);
