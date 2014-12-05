@@ -8,12 +8,14 @@
 
 void setpixel(int x, int y, int r, int g, int b);
 
-void inline incpix(int x, int y);
+void setpixeld(double x, double y, int r, int g, int b);
 
-void display(void);
+void binsearch_x(double leftx, double rightx, double y);
 
-void reshape(int width, int height);
+void binsearch_y(double x, double lefty, double righty);
 
-void idle(void);
+void* calc(void* threadid);
+
+void gr_error_callback(int error, const char* description);
 
 int main(int argc, char** argv);

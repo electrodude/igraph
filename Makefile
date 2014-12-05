@@ -13,8 +13,9 @@ clean:
 main:		main.o
 		${LD} -o $@ $^ ${LDFLAGS} 
 
-%.o:		%.c
-		${CC} ${CFLAGS} -c -o $@ $^
+%.o:		%.c %.h
+		${CC} ${CFLAGS} -c -o $@ $<
 
-%.o:		%.cpp
-		${CXX} ${CXXFLAGS} -c -o $@ $^
+%.o:		%.cpp %.hpp
+		${CXX} ${CXXFLAGS} -c -o $@ $<
+		
