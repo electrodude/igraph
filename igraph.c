@@ -315,11 +315,13 @@ void* calc(void* threadid)
 		}
 	}
 
+	glfwPostEmptyEvent();
+
 	printf("%d: quitting\n", id);
 	pthread_exit(NULL);
 }
 
-void gr_error_callback(int error, const char* description)
+static void gr_error_callback(int error, const char* description)
 {
 	fputs(description, stderr);
 }
@@ -421,7 +423,7 @@ int main(int argc, char** argv)
 		int rc = pthread_create(&threads[i], NULL, calc, threadid);
 		if (rc)
 		{
-			printf("ERROR; return code from pthread_create() is %d\n", rc);
+			printf("ERROR: return code from pthread_create() is %d\n", rc);
 			exit(-1);
 		}
 	}
@@ -436,16 +438,14 @@ int main(int argc, char** argv)
 		
 		glOrtho(0.0, 1.0, 0.0, 1.0, -1.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
-		
+
 		//setpixel(width/2, height/2, 255, 255, 255);
 		//glutSwapBuffers();
 		glDrawPixels(width, height, GL_RGB, GL_UNSIGNED_BYTE, screen);
 		
 		glfwSwapBuffers(gr_window);
 
-		glfwPollEvents();
-
-		usleep(100000);
+		glfwWaitEvents();
 	}
 
 	glfwDestroyWindow(gr_window);

@@ -16,7 +16,7 @@ void binsearch_y(double x, double lefty, double righty);
 
 void* calc(void* threadid);
 
-void gr_error_callback(int error, const char* description);
+static void gr_error_callback(int error, const char* description);
 
 void viewupdate();
 
