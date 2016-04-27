@@ -1,12 +1,10 @@
 /*
- *  main.c
+ *  igraph.c
  *  implicit equation grapher
  *
  *  Created by Albert Emanuel on 11/25/14.
  *
  */
-
-#include "main.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,12 +16,16 @@
 #define GLFW_INCLUDE_GLU
 #include <GLFW/glfw3.h>
 
+#include "igraph.h"
+
 GLFWwindow* gr_window;
 
 #define WIDTH 1280
-#define HEIGHT 712
+#define HEIGHT 740
 
 #define DETAIL 1
+
+#define M_PI 3.1415926535897932384626
 
 #if 0
 #define FUNC(x,y) (x*y*(1-y))
@@ -55,9 +57,9 @@ GLFWwindow* gr_window;
 
 #endif
 
-#if 1
+#if 0
 //#define FUNC(x,y) (sin(x*y) - x*x - y*y + 1)
-#define FUNC(x,y) (x*x+y*y+sin(8*x)+sin(8*y)-2)
+//#define FUNC(x,y) (x*x+y*y+sin(8*x)+sin(8*y)-2)
 //#define FUNC(x,y) (cos(x*x+y*y)/(pow(x*x-y*x - sin(x),1.0/3.0)) - 1)
 //#define FUNC(x,y) ((x*x*x*y + y*y*y*x - 4*x*y - x - y - 0.2) * (sqrt(x*x + y*y*x) - 2) - 0.1)
 //#define FUNC(x,y) ((x*y - x + y + sin(x*y*4)) * (x*x - y*y) - 2)
@@ -65,16 +67,40 @@ GLFWwindow* gr_window;
 
 //#define FUNC(x,y) ()
 
-#define FUNC(x,y) (2*y + 3*x + x*x + y*y - x*y - x*x*y + y*y*y - 3)
+#define _T 300
+#define _n 1
+#define _a 5.46
+#define _b 0.0305
+#define _R 0.08206
 
-#define XMIN -8
-#define XMAX 8
-#define YMIN -6
-#define YMAX 6
+
+#define FUNC(V,P) (((P+(_n*_n*_a/(V*V)))*(V-(_n*_b))-(_n*_R*_T))*V*P*(sin(V*M_PI)+((P > 0.0 && P < 0.5) ? 0.0 : 2.0))*(sin(P*M_PI)+((V > 0.0 && V < 0.5) ? 0.0 : 2.0)))
+//#define FUNC(V,P) (V*P*(sin(P*M_PI) + ((V > 0.0 && V < 1.0) ? 0.0 : 1.1)))
+
+#define XMIN -2
+#define XMAX 5
+#define YMIN -30
+#define YMAX 40
 
 #endif
 
-#define MAXERROR 1e-10
+#if 1
+//#define FUNC(x,y) (pow(x, sqrt(y)) - 4/(x-2))
+//#define FUNC(x,y) (sin(M_PI*x)+sin(M_PI*y)+sin(8*x)+sin(8*y)-1)
+//#define FUNC(x,y) ((13-x)*(12-y)*(11-x)*(10-y)*(9-x)*(8-y)*(7-x)*(6-y)*(5-x)*(4-y)*(3-x)*(2-y)*(1-x) - 5)
+//#define FUNC(x,y) (pow(y, x/2) - pow(3, (7 - pow(x,cos(y)))))
+#define FUNC(x,y) (x*x+y*y+sin(8*x)+sin(8*y)-1)
+
+#define XMIN -16
+#define XMAX 16
+#define YMIN -9
+#define YMAX 9
+
+#endif
+
+#define MAXERROR 5e2
+
+#define MINERROR 1e-10
 //#define MAXERROR ((DX > DY ? DY : DX)/2)
 
 #define STRIDE 1
@@ -123,9 +149,14 @@ void binsearch_x(double leftx, double rightx, double y)
 	int lefti = (int)((leftx-XMIN)/DX+0.5);
 	int righti = (int)((rightx-XMIN)/DX+0.5);
 
-	if (lefti == righti || fabs(leftx - rightx) <= MAXERROR)
+	double err = fabs(FUNC(leftx, y) - FUNC(rightx, y));
+
+	if (lefti == righti || err <= MINERROR)
 	{
-		setpixeld(midx, y, 255, 255, 255);
+		if (err <= MAXERROR)
+		{
+			setpixeld(midx, y, 255, 255, 255);
+		}
 		return;
 	}
 
@@ -147,9 +178,14 @@ void binsearch_y(double x, double lefty, double righty)
 	int lefti = (int)((lefty-YMIN)/DY+0.5);
 	int righti = (int)((righty-YMIN)/DY+0.5);
 
-	if (lefti == righti || fabs(FUNC(x, lefty) - FUNC(x, righty)) <= MAXERROR)
+	double err = fabs(FUNC(x, lefty) - FUNC(x, righty));
+
+	if (lefti == righti || err <= MINERROR)
 	{
-		setpixeld(x, midy, 255, 255, 255);
+		if (err <= MAXERROR)
+		{
+			setpixeld(x, midy, 255, 255, 255);
+		}
 		return;
 	}
 
@@ -166,7 +202,7 @@ void binsearch_y(double x, double lefty, double righty)
 
 void* calc(void* threadid)
 {
-	int id = (int)threadid;
+	int id = (int)(long)threadid;
 	int x;
 	int y;
 
@@ -209,7 +245,7 @@ void* calc(void* threadid)
 			for (x=0; x<WIDTH2; x+=STRIDE)
 			{
 				double xd = ((double)x)*DX2 + XMIN;
-				//setpixeld(xd, yd, 255, 0, 0);
+				//setpixeld(xd, yd, 0, 0, 255);
 				double leftx = xd;
 				double rightx = xd + DX*STRIDE;
 				if ((FUNC(leftx, yd) > 0) != (FUNC(rightx, yd) >= 0))
@@ -272,7 +308,7 @@ int main(int argc, char** argv)
 	for (i=0; i<num_threads; i++)
 	{
 		printf("In main: creating thread %d\n", i);
-		int rc = pthread_create(&threads[i], NULL, calc, (void*)i);
+		int rc = pthread_create(&threads[i], NULL, calc, (void*)(long)i);
 		if (rc)
 		{
 			printf("ERROR; return code from pthread_create() is %d\n", rc);

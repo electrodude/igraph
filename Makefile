@@ -1,21 +1,16 @@
-CFLAGS=-std=c99 -O2 -g -I/usr/local/include/ -I/usr/include/
-CXXFLAGS=-std=c++11 -O2 -g -fpermissive
-LDFLAGS=-L/usr/local/lib/ -L/usr/lib/ -L/usr/lib/mesa/ -lglfw3 -lX11 -lXrandr -lXi -lXxf86vm -lm -lpthread -lGL -lGLU
+CFLAGS=-std=c99 -O3 -Wextra -I/usr/local/include/ -I/usr/include/
+LDFLAGS=-L/usr/local/lib/ -L/usr/lib/ -L/usr/lib/mesa/ -lglfw -lX11 -lXrandr -lXi -lXxf86vm -lm -lpthread -lGL -lGLU
 CC=gcc
 CXX=g++
 LD=gcc
 
-all:		main
+all:		igraph
 
 clean:		
-		rm -f main main.o
+		rm -vf igraph *.o
 
-main:		main.o
+igraph:		igraph.o
 		${LD} -o $@ $^ ${LDFLAGS} 
 
 %.o:		%.c %.h
 		${CC} ${CFLAGS} -c -o $@ $<
-
-%.o:		%.cpp %.hpp
-		${CXX} ${CXXFLAGS} -c -o $@ $<
-		

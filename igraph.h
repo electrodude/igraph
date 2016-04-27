@@ -1,5 +1,5 @@
 /*
- *  main.h
+ *  igraph.h
  *  implicit equation grapher
  *
  *  Created by Albert Emanuel on 11/25/14.
