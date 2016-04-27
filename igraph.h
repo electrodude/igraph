@@ -18,4 +18,6 @@ void* calc(void* threadid);
 
 void gr_error_callback(int error, const char* description);
 
+void viewupdate();
+
 int main(int argc, char** argv);

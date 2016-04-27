@@ -1,5 +1,6 @@
-CFLAGS=-std=c99 -O3 -Wextra -I/usr/local/include/ -I/usr/include/
-LDFLAGS=-L/usr/local/lib/ -L/usr/lib/ -L/usr/lib/mesa/ -lglfw -lX11 -lXrandr -lXi -lXxf86vm -lm -lpthread -lGL -lGLU
+CFLAGS=-std=c99 -O3 -Wextra
+#CFLAGS=-std=c99 -Og -g -Wextra
+LDFLAGS=-L/usr/lib/mesa/ -lglfw -lX11 -lXrandr -lXi -lXxf86vm -lm -pthread -lGL -lGLU
 CC=gcc
 CXX=g++
 LD=gcc
