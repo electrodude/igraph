@@ -1,353 +1,360 @@
-/*
- *  igraph.c
- *  implicit equation grapher
- *
- *  Created by Albert Emanuel on 11/25/14.
- *
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/prctl.h>
+#include <errno.h>
 
 #include <math.h>
 
 #define GLFW_INCLUDE_GLU
 #include <GLFW/glfw3.h>
 
-#include "igraph.h"
+#include "quadtree.h"
+
+#include "func.h"
+
 
 GLFWwindow* gr_window;
 
-#define M_PI 3.1415926535897932384626
-
-#define FPART(x) (fabs((x) - (long)((x)+0.5)))
-
-#if 0
-#define FUNC(x,y) (x*y*(1-y))
-
-#define XMIN 2.99
-#define XMAX 4
-#define YMIN 0
-#define YMAX 1
-
-#endif
-
-#if 0
-#define FUNC(x,y) (x*y*(1-y))
-
-#define XMIN 0.9
-#define XMAX 3.9
-#define YMIN 0
-#define YMAX 1
-
-#endif
-
-#if 0
-//#define FUNC(x,y) (sin(x*y) - x*x - y*y + 1)
-//#define FUNC(x,y) (x*x+y*y+sin(8*x)+sin(8*y)-2)
-//#define FUNC(x,y) (cos(x*x+y*y)/(pow(x*x-y*x - sin(x),1.0/3.0)) - 1)
-//#define FUNC(x,y) ((x*x*x*y + y*y*y*x - 4*x*y - x - y - 0.2) * (sqrt(x*x + y*y*x) - 2) - 0.1)
-//#define FUNC(x,y) ((x*y - x + y + sin(x*y*4)) * (x*x - y*y) - 2)
-//#define FUNC(x,y) ((log(abs(- x*x + y + pow(x + y, exp(x*sin(x*y)*sin(x*y)))))/log(abs(x*y)) * pow(y, 1/3) + log(abs(pow(x, y)))/log(y*y)- 2) * (sin(x) - y))
-
-//#define FUNC(x,y) ()
-
-#define _T 300
-#define _n 1
-#define _a 5.46
-#define _b 0.0305
-#define _R 0.08206
+int width = 640;
+int height = 400;
 
 
-#define FUNC(V,P) (((P+(_n*_n*_a/(V*V)))*(V-(_n*_b))-(_n*_R*_T))*V*P*(sin(V*M_PI)+((P > 0.0 && P < 0.5) ? 0.0 : 2.0))*(sin(P*M_PI)+((V > 0.0 && V < 0.5) ? 0.0 : 2.0)))
-//#define FUNC(V,P) (V*P*(sin(P*M_PI) + ((V > 0.0 && V < 1.0) ? 0.0 : 1.1)))
+double zoomspeed = 1.1;
+double gridcurr = 1.0;
+double gridsize = 1.0;
+int gridmul = 10;
+int gridmul2;
+int gridmul3;
 
-#define XMIN -2
-#define XMAX 5
-#define YMIN -30
-#define YMAX 40
+double xmid;
+double ymid;
+double zoom;
 
-#endif
+int scrolling = 0;
+double scrollx;
+double scrolly;
 
-#if 0
-//#define FUNC(x,y) (pow(x, sqrt(y)) - 4/(x-2))
-//#define FUNC(x,y) (sin(M_PI*x)+sin(M_PI*y)+sin(8*x)+sin(8*y)-1)
-//#define FUNC(x,y) ((13-x)*(12-y)*(11-x)*(10-y)*(9-x)*(8-y)*(7-x)*(6-y)*(5-x)*(4-y)*(3-x)*(2-y)*(1-x) - 5)
-//#define FUNC(x,y) (pow(y, x/2) - pow(3, (7 - pow(x,cos(y)))))
-#define FUNC(x,y) (x*x+y*y+sin(8*x)+sin(8*y)-1)
+volatile double xmin;
+volatile double xmax;
+volatile double ymin;
+volatile double ymax;
 
-#define XMIN -16
-#define XMAX 16
-#define YMIN -9
-#define YMAX 9
-#endif
+volatile double dp;
 
-#if 1
-#define FUNC(x,y) ((x*x) - (-2+y+5*cos(y)))
+quadtree_node* rootnode;
 
-#define XMIN -32
-#define XMAX 32
-#define YMIN -12
-#define YMAX 24
-#endif
-
-
-int width = 1280;
-int height = 740;
-
-int detail = 1;
-
-double xmin = XMIN;
-double xmax = XMAX;
-double ymin = YMIN;
-double ymax = YMAX;
-
-
-int width2;
-int height2;
-
-double dx;
-double dy;
-double dx2;
-double dy2;
-
-
-int stride = 1;
-
-int maxerror = 5e2;
-int minerror = 1e-10;
-
-
-int num_threads;
 
 int changed;
 
-char* screen;
+pthread_t thread;
 
-int* rows;
-int* cols;
 
-//int buf[width][height];
-
-pthread_t* threads;
-//pthread_mutex_t bufmutex;
-
-void setpixel(int x, int y, int r, int g, int b)
+void quadtree_search(quadtree_node* node, double xl, double xh, double yl, double yh)
 {
-	if (x<0 || x>=width || y<0 || y>=height)
+	//printf("quadtree_search %g %g %g %g\n", xh, xl, yh, yl);
+
+	// if this node is entirely off the screen
+	if (xh < xmin || xl > xmax || yh < ymin || yl > ymax)
 	{
-		return;
-	}
-	screen[(y*width+x)*3+0] |= r;
-	screen[(y*width+x)*3+1] |= g;
-	screen[(y*width+x)*3+2] |= b;
-}
-
-void setpixeld(double x, double y, int r, int g, int b)
-{
-	int xi = (int)((x-xmin)/dx+0.5); 
-	int yi = (int)((y-ymin)/dy+0.5);
-	setpixel(xi, yi, r, g, b);
-}
-
-static inline void addpixel(int x, int y, int rd, int gd, int bd)
-{
-	int r, g, b;
-
-	//getpixel(x, y, &r, &g, &b);
-
-	r = 0;
-	g = 0;
-	b = 0;
-
-	r += rd;
-	g += gd;
-	b += bd;
-
-	if (r < 0) r = 0;
-	if (g < 0) g = 0;
-	if (b < 0) b = 0;
-
-	if (r > 255) r = 255;
-	if (g > 255) g = 255;
-	if (b > 255) b = 255;
-
-	setpixel(x, y, r, g, b);
-}
-
-
-void binsearch_x(double leftx, double rightx, double y)
-{
-	double midx = (leftx + rightx)/2.0;
-
-	int lefti = (int)((leftx-xmin)/dx+0.5);
-	int righti = (int)((rightx-xmin)/dx+0.5);
-
-	double err = fabs(FUNC(leftx, y) - FUNC(rightx, y));
-
-	if (lefti == righti || err <= minerror)
-	{
-		if (err <= maxerror)
-		{
-			setpixeld(midx, y, 255, 255, 255);
-		}
+		//printf("quit\n");
+		// then return now
 		return;
 	}
 
-	if ((FUNC(leftx, y) > 0) != (FUNC(midx, y) >= 0))
+	int xhp = (int)((xh-xmin)/dp+0.5);
+	int xlp = (int)((xl-xmin)/dp+0.5);
+
+	int yhp = (int)((yh-ymin)/dp+0.5);
+	int ylp = (int)((yl-ymin)/dp+0.5);
+
+	//printf("%d %d %d %d\n", xlp, xhp, ylp, yhp);
+
+	double bls = func(xl, yl) > 0;
+	double brs = func(xh, yl) > 0;
+	double tls = func(xl, yh) > 0;
+	double trs = func(xh, yh) > 0;
+
+	int on = bls != brs || tls != trs || bls != tls || brs != trs;
+
+	if (on)
 	{
-		binsearch_x(leftx, midx, y);
+		// if this node is entirely inside one pixel
+		if ((xhp == xlp && yhp == ylp) || (xh-xl < dp*0.2 && yh - yl < dp*0.2))
+		{
+			//printf("quadtree_search %g %g %g %g\n", xh, xl, yh, yl);
+
+			node->r = 1.0;
+			node->g = 1.0;
+			node->b = 1.0;
+			node->a = 1.0;
+
+			node->on = NODE_ON;
+
+			return;
+		}
 	}
 
-	if ((FUNC(midx, y) > 0) != (FUNC(rightx, y) >= 0))
+	int recurse = 0;
+
+	if (xh-xl > dp*2 || yh-yl > dp*2)
 	{
-		binsearch_x(midx, rightx, y);
+		recurse = 1;
 	}
+
+	if (!recurse)
+	{
+		recurse = on;
+	}
+
+	if (recurse)
+	{
+		double xm = 0.5*xh + 0.5*xl;
+		double ym = 0.5*yh + 0.5*yl;
+
+		quadtree_node* bl = quadtree_index_force(node, 0);
+		quadtree_search(bl, xl, xm, yl, ym);
+
+		quadtree_node* br = quadtree_index_force(node, 1);
+		quadtree_search(br, xm, xh, yl, ym);
+
+		quadtree_node* tl = quadtree_index_force(node, 2);
+		quadtree_search(tl, xl, xm, ym, yh);
+
+		quadtree_node* tr = quadtree_index_force(node, 3);
+		quadtree_search(tr, xm, xh, ym, yh);
+	}
+
+	node->on = NODE_CHILDON;
+
+	quadtree_node_update(node);
 }
 
-void binsearch_y(double x, double lefty, double righty)
+void* calc(void* param)
 {
-	double midy = (lefty + righty)/2.0;
+	prctl(PR_SET_NAME, "graph");
 
-	int lefti = (int)((lefty-ymin)/dy+0.5);
-	int righti = (int)((righty-ymin)/dy+0.5);
-
-	double err = fabs(FUNC(x, lefty) - FUNC(x, righty));
-
-	if (lefti == righti || err <= minerror)
+	while (1)
 	{
-		if (err <= maxerror)
-		{
-			setpixeld(x, midy, 255, 255, 255);
-		}
-		return;
-	}
+		quadtree_search(rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20));
+		nprune = 0;
+		quadtree_prune(rootnode);
+		printf("nodes: %ld\n", rootnode->totalchildren);
 
-	if ((FUNC(x, lefty) > 0) != (FUNC(x, midy) >= 0))
-	{
-		binsearch_y(x, lefty, midy);
-	}
-
-	if ((FUNC(x, midy) > 0) != (FUNC(x, righty) >= 0))
-	{
-		binsearch_y(x, midy, righty);
-	}
-}
-
-void* calc(void* threadid)
-{
-	int id = *(int*)threadid;
-	free(threadid);
-
-	char name[20];
-	snprintf(name, 20, "graph%d", id);
-	prctl(PR_SET_NAME, name);
-
-	int x;
-	int y;
-
-	printf("%d/%d: starting\n", id, num_threads);
-
-	if ((id & 1) == 0 || num_threads == 1)
-	{
-		printf("%d: doing cols\n", id);
-		for (x=id/2; x<width2; x+=(num_threads+1)/2)
-		{
-			if (!cols[x])
-			{
-				cols[x] = 1;
-
-				double xd = ((double)x)*dx2 + xmin;
-
-				printf("%d: x=%d, %f done\n", id, x, (double)x/width2);
-
-				for (y=0; y<height2; y+=stride)
-				{
-					double yd = ((double)y)*dy2 + ymin;
-					//setpixeld(xd, yd, 255, 0, 0);
-					double lefty = yd;
-					double righty = yd + dy*stride;
-					if ((FUNC(xd, lefty) > 0) != (FUNC(xd, righty) >= 0))
-					{
-						binsearch_y(xd, lefty, righty);
-					}
-				}
-
-				cols[x] = 2;
-
-				changed=1;
-			}
-		}
-	}
-	
-	if ((id & 1) == 1 || num_threads == 1)
-	{
-		printf("%d: doing rows\n", id);
-		for (y=id/2; y<height2; y+=(num_threads+2)/2-1)
-		{
-			if (!rows[y])
-			{
-				rows[y] = 1;
-
-				double yd = ((double)y)*dy2 + ymin;
-
-				printf("%d: y=%d, %f done\n", id, y, (double)y/height2);
-
-				for (x=0; x<width2; x+=stride)
-				{
-					double xd = ((double)x)*dx2 + xmin;
-					//setpixeld(xd, yd, 255, 0, 0);
-					double leftx = xd;
-					double rightx = xd + dx*stride;
-					if ((FUNC(leftx, yd) > 0) != (FUNC(rightx, yd) >= 0))
-					{
-						binsearch_x(leftx, rightx, yd);
-					}
-				}
-
-				rows[y] = 2;
-
-				changed=1;
-			}
-		}
+		glfwPostEmptyEvent();
 	}
 
 	glfwPostEmptyEvent();
 
-	printf("%d: quitting\n", id);
 	pthread_exit(NULL);
 }
+
+
+
+void quadtree_render(quadtree_node* node, double xl, double xh, double yl, double yh)
+{
+	//printf("quadtree_render %g %g %g %g\n", xh, xl, yh, yl);
+	if (node == NULL) return;
+
+	// if this node is entirely off the screen
+	if (xh < xmin || xl > xmax || yh < ymin || yl > ymax)
+	{
+		// then return now
+		return;
+	}
+
+	if (!node->on) return;
+
+	double xm = 0.5*xh + 0.5*xl;
+	double ym = 0.5*yh + 0.5*yl;
+
+#if 0
+	glEnd();
+
+	glBegin(GL_LINE_LOOP);
+
+	glColor4d(0.0, 0.0, 1.0, 0.5);
+	glVertex2d(xl, yl);
+	glVertex2d(xh, yl);
+	glVertex2d(xh, yh);
+	glVertex2d(xl, yh);
+	glEnd();
+
+	glBegin(GL_LINES);
+
+	glVertex2d(xl, ym);
+	glVertex2d(xh, ym);
+
+	glVertex2d(xm, yl);
+	glVertex2d(xm, yh);
+
+	glEnd();
+
+	glBegin(GL_POINTS);
+#endif
+
+	int xhp = (long)((xh-xmin)/dp+0.5);
+	int xlp = (long)((xl-xmin)/dp+0.5);
+
+	int yhp = (long)((yh-ymin)/dp+0.5);
+	int ylp = (long)((yl-ymin)/dp+0.5);
+
+	// if this node is entirely inside one pixel
+	if ((xhp == xlp && yhp == ylp) || (xh-xl < dp && yh - yl < dp))
+	{
+		// then we're done; draw this node
+		glColor4d(node->r, node->g, node->b, node->a);
+		glVertex2d(xm, ym);
+		return;
+	}
+
+	quadtree_node* bl = node->children[0];
+	quadtree_render(bl, xl, xm, yl, ym);
+
+	quadtree_node* br = node->children[1];
+	quadtree_render(br, xm, xh, yl, ym);
+
+	quadtree_node* tl = node->children[2];
+	quadtree_render(tl, xl, xm, ym, yh);
+
+	quadtree_node* tr = node->children[3];
+	quadtree_render(tr, xm, xh, ym, yh);
+
+	// if no children
+	if (bl == NULL && br == NULL && tl == NULL && tr == NULL)
+	{
+		// then draw this node
+		glEnd();
+
+		glBegin(GL_QUADS);
+
+		glColor4d(node->r, node->g, node->b, node->a);
+		glVertex2d(xl, yl);
+		glVertex2d(xh, yl);
+		glVertex2d(xh, yh);
+		glVertex2d(xl, yh);
+
+		glEnd();
+
+		glBegin(GL_POINTS);
+	}
+}
+
+
+
+void setview(double _xmid, double _ymid, double _zoom)
+{
+	//printf("setview(%g, %g, %g)\n", _xmid, _ymid, _zoom);
+
+	xmid = _xmid;
+	ymid = _ymid;
+	zoom = _zoom;
+
+	gridmul2 = gridmul  * gridmul;
+	gridmul3 = gridmul2 * gridmul;
+
+	double halfheight = height * 0.5;
+	double halfwidth  = width  * 0.5;
+
+	dp = zoom;
+
+	xmin = xmid - halfwidth *dp;
+	xmax = xmid + halfwidth *dp;
+
+	ymin = ymid - halfheight*dp;
+	ymax = ymid + halfheight*dp;
+
+	//printf("dp = %g\n", dp);
+
+	if (gridcurr/zoom > gridsize * gridmul)
+	{
+		gridcurr /= gridmul;
+	}
+	else if (gridcurr/zoom <= gridsize)
+	{
+		gridcurr *= gridmul;
+	}
+
+	//printf("gridcurr: %f\n", gridcurr);
+}
+
 
 static void gr_error_callback(int error, const char* description)
 {
 	fputs(description, stderr);
 }
 
-void viewupdate()
+static void gr_on_mousebutton(GLFWwindow* window, int button, int action, int mods)
 {
-	width2 = width*detail;
-	height2 = height*detail;
+	//printf("mousebutton %d %d %d\n", button, action, mods);
 
-	dx = (xmax-xmin)/(width-1);
-	dy = (ymax-ymin)/(height-1);
-	dx2 = (xmax-xmin)/(width2-1);
-	dy2 = (ymax-ymin)/(height2-1);
+	if (button == 1)
+	{
+		if (action == GLFW_PRESS)
+		{
+			double xpos, ypos;
+			glfwGetCursorPos(window, &xpos, &ypos);
+
+			scrollx = xmid + xpos*dp;
+			scrolly = ymid - ypos*dp;
+
+			scrolling = 1;
+		}
+		else
+		{
+			scrolling = 0;
+		}
+	}
+
 }
+
+static void gr_on_mousemove(GLFWwindow* window, double xpos, double ypos)
+{
+	//printf("mouse %f %f\n", xpos, ypos);
+
+	if (scrolling)
+	{
+		setview(-xpos*dp + scrollx, ypos*dp + scrolly, zoom);
+	}
+}
+
+static void gr_on_mousewheel(GLFWwindow* window, double xoffset, double yoffset)
+{
+	//printf("mousescroll %f %f\n", xoffset, yoffset);
+
+	double a = (yoffset < 0) ? zoomspeed : 1.0/zoomspeed;
+
+	double xpos, ypos;
+	glfwGetCursorPos(window, &xpos, &ypos);
+
+	if (scrolling)
+	{
+		scrollx = xmid + xpos*dp;
+		scrolly = ymid - ypos*dp;
+	}
+
+	double xposc = xpos*dp + xmin;
+	double yposc = ymax - ypos*dp;
+
+	setview((xmid - xposc) * a + xposc, (ymid - yposc) * a + yposc, zoom * a);
+}
+
+static void gr_on_resize(GLFWwindow* window, int _width, int _height)
+{
+	width = _width;
+	height = _height;
+
+	glViewport(0, 0, width, height);
+
+	//printf("resize %d %d\n", width, height);
+
+	setview(xmid, ymid, zoom);
+}
+
 
 int main(int argc, char** argv)
 {
-
-	int cores = sysconf(_SC_NPROCESSORS_ONLN);
-
-	num_threads = 2;
-
-	printf("%d cores, %d threads\n", cores, num_threads);
-
-	threads = malloc(num_threads*sizeof(pthread_t));
-
 	glfwSetErrorCallback(gr_error_callback);
 
 	if (!glfwInit())
@@ -357,7 +364,7 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-	gr_window = glfwCreateWindow(width, height, "Graph", NULL, NULL);
+	gr_window = glfwCreateWindow(width, height, "igraph", NULL, NULL);
 
 	if (!gr_window)
 	{
@@ -367,82 +374,151 @@ int main(int argc, char** argv)
 
 	glfwMakeContextCurrent(gr_window);
 
-	glScaled(1/detail, 1/detail, 1/detail);
-	
+	glfwSetMouseButtonCallback(gr_window, gr_on_mousebutton);
 
-	viewupdate();
+	glfwSetCursorPosCallback(gr_window, gr_on_mousemove);
 
-	screen = calloc(width*height*3, sizeof(char));	// 3 because r,g,b
+	glfwSetScrollCallback(gr_window, gr_on_mousewheel);
 
-	rows = calloc(height2, sizeof(int));
-	cols = calloc(width2, sizeof(int));
-
-	for (double xf = ((long)xmin); xf < ((long)xmax) + 1; xf += 1)
-	{
-		int x = (int)((xf-xmin)/dx);
-		for (int y = 0; y < height; y++)
-		{
-			//int s = (fabs(xf - (long)(xf+0.5)) <= 0.05) ? 128 : 64;
-			int s = (FPART(fabs(xf)/10) <= 0.05) ? 127 : 64;
-
-			int r = (fabs(xf) <= 0.05) ? 255 : s;
-			int g = (fabs(xf) <= 0.05) ?   0 : s;
-			int b = (fabs(xf) <= 0.05) ?   0 : s;
-			addpixel(x, y, r, g, b);
-		}
-	}
-
-	for (double yf = ((long)ymin); yf < ((long)ymax) + 1; yf += 1)
-	{
-		int y = (int)((yf-ymin)/dy);
-		for (int x = 0; x < width; x++)
-		{
-			//int s = (fabs(yf - (long)(yf+0.5)) <= 0.05) ? 128 : 64;
-			int s = (FPART(fabs(yf)/10) <= 0.05) ? 127 : 64;
-
-			int r = (fabs(yf) <= 0.05) ?   0 : s;
-			int g = (fabs(yf) <= 0.05) ? 255 : s;
-			int b = (fabs(yf) <= 0.05) ?   0 : s;
-			addpixel(x, y, r, g, b);
-		}
-	}
+	glfwSetFramebufferSizeCallback(gr_window, gr_on_resize);
 
 
-	//pthread_mutex_init(&bufmutex, NULL);
-	
+	GLFWcursor* cursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
+
+	glfwSetCursor(gr_window, cursor);
+
+
+	glfwGetFramebufferSize(gr_window, &width, &height);
+
+	glViewport(0, 0, width, height);
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+
+	setview(0.0, 0.0, 0.05);
+
+	rootnode = quadtree_node_new();
+
+
+
 	pthread_attr_t threadattr;
 	pthread_attr_init(&threadattr);
-	//pthread_attr_setstacksize(&threadattr, 2097152);
-	
-	int i;
-	for (i=0; i<num_threads; i++)
+
+	int en = pthread_create(&thread, NULL, calc, NULL);
+	if (en)
 	{
-		printf("In main: creating thread %d\n", i);
-		int* threadid = malloc(sizeof(int));
-		*threadid = i;
-		int rc = pthread_create(&threads[i], NULL, calc, threadid);
-		if (rc)
-		{
-			printf("ERROR: return code from pthread_create() is %d\n", rc);
-			exit(-1);
-		}
+		errno = en;
+		perror("pthread_create");
+		exit(-1);
 	}
-	
+
 	while (!glfwWindowShouldClose(gr_window))
 	{
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
-		
+
 		glMatrixMode(GL_MODELVIEW);
 		glLoadIdentity();
-		
-		glOrtho(0.0, 1.0, 0.0, 1.0, -1.0, 1.0);
+
+		double aspect = width/(double)height;
+
+		double xscl = 1;
+		double yscl = 1;
+
+		if (aspect > 1)
+		{
+			xscl *= aspect;
+		}
+		else if (aspect < 1)
+		{
+			yscl /= aspect;
+		}
+
+		glOrtho(xmin, xmax, ymin, ymax, -1.0, 1.0);
+
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		//setpixel(width/2, height/2, 255, 255, 255);
-		//glutSwapBuffers();
-		glDrawPixels(width, height, GL_RGB, GL_UNSIGNED_BYTE, screen);
-		
+		//glScaled(1.0/width, 1.0/height, 1.0);
+
+		//glScaled(dp, dp, 1.0);
+
+		//glTranslated(-xmin, -ymin, 0.0);
+
+		double gridstress = (gridcurr / zoom / gridsize - 1) / (gridmul - 1) * 3 + 1;
+
+		//printf("gridstress = %g\n", gridstress);
+
+
+		glBegin(GL_LINES);
+
+		for (int x = xmin/gridcurr; x < xmax/gridcurr + 1; x++)
+		{
+			//int x = 0.5 + (xf / gridcurr);
+			double xf = x*gridcurr;
+			//int s = (fabs(xf - (long)(xf+0.5)) <= 0.05) ? 128 : 64;
+			double s = (x % gridmul3 == 0) ? 1.0           :
+			           (x % gridmul2 == 0) ? 1/3.0         :
+			           (x % gridmul  == 0) ? 1/3.0/3.0     :
+			                                 1/3.0/3.0/3.0 ;
+
+			double r = 1.0;
+			double g = 1.0;
+			double b = 1.0;
+			double a = 0.5 * s * gridstress;
+
+			glColor4d(r, g, b, a);
+
+			glVertex2d(xf, ymin);
+			glVertex2d(xf, ymax);
+		}
+
+		for (int y = ymin/gridcurr; y < ymax/gridcurr + 1; y++)
+		{
+			//int y = yf / gridcurr;
+			double yf = y*gridcurr;
+			//int s = (fabs(yf - (long)(yf+0.5)) <= 0.05) ? 128 : 64;
+			double s = (y % gridmul3 == 0) ? 1.0           :
+			           (y % gridmul2 == 0) ? 1/3.0         :
+			           (y % gridmul  == 0) ? 1/3.0/3.0     :
+			                                 1/3.0/3.0/3.0 ;
+
+			double r = 1.0;
+			double g = 1.0;
+			double b = 1.0;
+			double a = 0.5 * s * gridstress;
+
+			glColor4d(r, g, b, a);
+
+			glVertex2d(xmin, yf);
+			glVertex2d(xmax, yf);
+		}
+
+		glColor4ub(255,   0,   0, 255);
+
+		glVertex2d(0.0, ymin);
+		glVertex2d(0.0, ymax);
+
+		glColor4ub(  0, 255,   0, 255);
+
+		glVertex2d(xmin, 0.0);
+		glVertex2d(xmax, 0.0);
+
+		glEnd();
+
+		glBegin(GL_POINTS);
+
+		quadtree_render(rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20));
+
+		glEnd();
+
+		int err = glGetError();
+
+		if (err)
+		{
+			printf("GL error: %d\n", err);
+		}
+
 		glfwSwapBuffers(gr_window);
 
 		glfwWaitEvents();

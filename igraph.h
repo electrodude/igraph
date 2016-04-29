@@ -1,23 +1,8 @@
-/*
- *  igraph.h
- *  implicit equation grapher
- *
- *  Created by Albert Emanuel on 11/25/14.
- *
- */
-
-void setpixel(int x, int y, int r, int g, int b);
-
-void setpixeld(double x, double y, int r, int g, int b);
-
-void binsearch_x(double leftx, double rightx, double y);
-
-void binsearch_y(double x, double lefty, double righty);
+void quadtree_search(quadtree_node* node, double xl, double xh, double yl, double yh);
+void quadtree_render(quadtree_node* node, double xl, double xh, double yl, double yh);
 
 void* calc(void* threadid);
 
-static void gr_error_callback(int error, const char* description);
-
-void viewupdate();
+void setview(double _xmid, double _ymid, double _zoom);
 
 int main(int argc, char** argv);
