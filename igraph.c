@@ -32,9 +32,9 @@ double xmid;
 double ymid;
 double zoom;
 
-int scrolling = 0;
-double scrollx;
-double scrolly;
+int panning = 0;
+double panx;
+double pany;
 
 volatile double xmin;
 volatile double xmax;
@@ -43,31 +43,26 @@ volatile double ymax;
 
 volatile double dp;
 
+double mindetail = 4.0;
+double maxdetail = 1.0;
+
+
 quadtree_node* rootnode;
-
-
-int changed;
 
 pthread_t thread;
 
 
-void quadtree_search(quadtree_node* node, double xl, double xh, double yl, double yh)
+void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, double yh)
 {
 	//printf("quadtree_search %g %g %g %g\n", xh, xl, yh, yl);
 
-	// if this node is entirely off the screen
+	// If this node is entirely off the screen
 	if (xh < xmin || xl > xmax || yh < ymin || yl > ymax)
 	{
-		//printf("quit\n");
 		// then return now
+		//printf("quit\n");
 		return;
 	}
-
-	int xhp = (int)((xh-xmin)/dp+0.5);
-	int xlp = (int)((xl-xmin)/dp+0.5);
-
-	int yhp = (int)((yh-ymin)/dp+0.5);
-	int ylp = (int)((yl-ymin)/dp+0.5);
 
 	//printf("%d %d %d %d\n", xlp, xhp, ylp, yhp);
 
@@ -80,17 +75,18 @@ void quadtree_search(quadtree_node* node, double xl, double xh, double yl, doubl
 
 	if (on)
 	{
-		// if this node is entirely inside one pixel
-		if ((xhp == xlp && yhp == ylp) || (xh-xl < dp*0.2 && yh - yl < dp*0.2))
+		// If this node is smaller than maxdetail pixels
+		if (xh - xl < dp*maxdetail && yh - yl < dp*maxdetail)
 		{
+			// then make a leaf node
 			//printf("quadtree_search %g %g %g %g\n", xh, xl, yh, yl);
-
+			quadtree_node* node = quadtree_node_get(nodeptr);
 			node->r = 1.0;
 			node->g = 1.0;
 			node->b = 1.0;
 			node->a = 1.0;
 
-			node->on = NODE_ON;
+			*nodeptr = node;
 
 			return;
 		}
@@ -98,14 +94,16 @@ void quadtree_search(quadtree_node* node, double xl, double xh, double yl, doubl
 
 	int recurse = 0;
 
-	if (xh-xl > dp*2 || yh-yl > dp*2)
+	// If not enough detail yet, then recurse
+	if (xh - xl > dp*mindetail || yh - yl > dp*mindetail)
 	{
 		recurse = 1;
 	}
 
-	if (!recurse)
+	// If graph intersects this node, then recurse
+	if (on)
 	{
-		recurse = on;
+		recurse = 1;
 	}
 
 	if (recurse)
@@ -113,22 +111,24 @@ void quadtree_search(quadtree_node* node, double xl, double xh, double yl, doubl
 		double xm = 0.5*xh + 0.5*xl;
 		double ym = 0.5*yh + 0.5*yl;
 
-		quadtree_node* bl = quadtree_index_force(node, 0);
-		quadtree_search(bl, xl, xm, yl, ym);
+		// get node
+		quadtree_node* node = quadtree_node_get(nodeptr);
 
-		quadtree_node* br = quadtree_index_force(node, 1);
-		quadtree_search(br, xm, xh, yl, ym);
+		node->a /= 2.0; // show what it's working on
 
-		quadtree_node* tl = quadtree_index_force(node, 2);
-		quadtree_search(tl, xl, xm, ym, yh);
+		// recursively search each child
+		quadtree_search(&node->children[0], xl, xm, yl, ym);
 
-		quadtree_node* tr = quadtree_index_force(node, 3);
-		quadtree_search(tr, xm, xh, ym, yh);
+		quadtree_search(&node->children[1], xm, xh, yl, ym);
+
+		quadtree_search(&node->children[2], xl, xm, ym, yh);
+
+		quadtree_search(&node->children[3], xm, xh, ym, yh);
+
+		// put node in tree, update it, or delete it as appropriate
+		quadtree_node_update(nodeptr, node);
 	}
 
-	node->on = NODE_CHILDON;
-
-	quadtree_node_update(node);
 }
 
 void* calc(void* param)
@@ -137,10 +137,8 @@ void* calc(void* param)
 
 	while (1)
 	{
-		quadtree_search(rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20));
-		nprune = 0;
-		quadtree_prune(rootnode);
-		printf("nodes: %ld\n", rootnode->totalchildren);
+		quadtree_search(&rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20));
+		printf("nodes: %ld\n", rootnode != NULL ? rootnode->totalchildren + 1 : 0);
 
 		glfwPostEmptyEvent();
 	}
@@ -152,19 +150,17 @@ void* calc(void* param)
 
 
 
-void quadtree_render(quadtree_node* node, double xl, double xh, double yl, double yh)
+void quadtree_render(const quadtree_node* node, double xl, double xh, double yl, double yh)
 {
 	//printf("quadtree_render %g %g %g %g\n", xh, xl, yh, yl);
 	if (node == NULL) return;
 
-	// if this node is entirely off the screen
+	// If this node is entirely off the screen
 	if (xh < xmin || xl > xmax || yh < ymin || yl > ymax)
 	{
 		// then return now
 		return;
 	}
-
-	if (!node->on) return;
 
 	double xm = 0.5*xh + 0.5*xl;
 	double ym = 0.5*yh + 0.5*yl;
@@ -172,14 +168,7 @@ void quadtree_render(quadtree_node* node, double xl, double xh, double yl, doubl
 #if 0
 	glEnd();
 
-	glBegin(GL_LINE_LOOP);
-
 	glColor4d(0.0, 0.0, 1.0, 0.5);
-	glVertex2d(xl, yl);
-	glVertex2d(xh, yl);
-	glVertex2d(xh, yh);
-	glVertex2d(xl, yh);
-	glEnd();
 
 	glBegin(GL_LINES);
 
@@ -194,42 +183,51 @@ void quadtree_render(quadtree_node* node, double xl, double xh, double yl, doubl
 	glBegin(GL_POINTS);
 #endif
 
-	int xhp = (long)((xh-xmin)/dp+0.5);
-	int xlp = (long)((xl-xmin)/dp+0.5);
-
-	int yhp = (long)((yh-ymin)/dp+0.5);
-	int ylp = (long)((yl-ymin)/dp+0.5);
-
-	// if this node is entirely inside one pixel
-	if ((xhp == xlp && yhp == ylp) || (xh-xl < dp && yh - yl < dp))
+	// If the node fits entirely on the screen
+	if (xl >= xmin && xh <= xmax && yl >= ymin && yh <= ymax)
 	{
-		// then we're done; draw this node
-		glColor4d(node->r, node->g, node->b, node->a);
-		glVertex2d(xm, ym);
-		return;
+		// figure out where on the screen it is
+		int xhp = (xh-xmin) / dp;
+		int xlp = (xl-xmin) / dp;
+
+		int yhp = (yh-ymin) / dp;
+		int ylp = (yl-ymin) / dp;
+
+		// If this node is entirely inside a single pixel, or smaller than one pixel
+		if ((xhp == xlp && yhp == ylp) || (xh - xl <= dp && yh - yl <= dp))
+		{
+			// then we're done; draw this node
+			glColor4d(node->r, node->g, node->b, node->a);
+			glVertex2d(xm, ym);
+			return;
+		}
 	}
 
-	quadtree_node* bl = node->children[0];
-	quadtree_render(bl, xl, xm, yl, ym);
-
-	quadtree_node* br = node->children[1];
-	quadtree_render(br, xm, xh, yl, ym);
-
-	quadtree_node* tl = node->children[2];
-	quadtree_render(tl, xl, xm, ym, yh);
-
-	quadtree_node* tr = node->children[3];
-	quadtree_render(tr, xm, xh, ym, yh);
-
-	// if no children
-	if (bl == NULL && br == NULL && tl == NULL && tr == NULL)
+	// If this node has any children
+	if (node->totalchildren)
 	{
-		// then draw this node
+		// then recurse for all of its children
+		quadtree_node* bl = node->children[0];
+		quadtree_render(bl, xl, xm, yl, ym);
+
+		quadtree_node* br = node->children[1];
+		quadtree_render(br, xm, xh, yl, ym);
+
+		quadtree_node* tl = node->children[2];
+		quadtree_render(tl, xl, xm, ym, yh);
+
+		quadtree_node* tr = node->children[3];
+		quadtree_render(tr, xm, xh, ym, yh);
+	}
+	else
+	{
+		// otherwise, just draw this node
 		glEnd();
+
+		glColor4d(node->r, node->g, node->b, node->a);
 
 		glBegin(GL_QUADS);
 
-		glColor4d(node->r, node->g, node->b, node->a);
 		glVertex2d(xl, yl);
 		glVertex2d(xh, yl);
 		glVertex2d(xh, yh);
@@ -238,6 +236,8 @@ void quadtree_render(quadtree_node* node, double xl, double xh, double yl, doubl
 		glEnd();
 
 		glBegin(GL_POINTS);
+
+		glVertex2d(xm, ym);
 	}
 }
 
@@ -267,6 +267,7 @@ void setview(double _xmid, double _ymid, double _zoom)
 
 	//printf("dp = %g\n", dp);
 
+	// adjust gridlines to appropriate size
 	if (gridcurr/zoom > gridsize * gridmul)
 	{
 		gridcurr /= gridmul;
@@ -289,21 +290,23 @@ static void gr_on_mousebutton(GLFWwindow* window, int button, int action, int mo
 {
 	//printf("mousebutton %d %d %d\n", button, action, mods);
 
-	if (button == 1)
+	//if (button == 1)
+	if (1) // any button pans now, this might change to only RMB or MMB
 	{
 		if (action == GLFW_PRESS)
 		{
 			double xpos, ypos;
 			glfwGetCursorPos(window, &xpos, &ypos);
 
-			scrollx = xmid + xpos*dp;
-			scrolly = ymid - ypos*dp;
+			// set pan origin
+			panx = xmid + xpos*dp;
+			pany = ymid - ypos*dp;
 
-			scrolling = 1;
+			panning = 1;
 		}
 		else
 		{
-			scrolling = 0;
+			panning = 0;
 		}
 	}
 
@@ -313,9 +316,9 @@ static void gr_on_mousemove(GLFWwindow* window, double xpos, double ypos)
 {
 	//printf("mouse %f %f\n", xpos, ypos);
 
-	if (scrolling)
+	if (panning)
 	{
-		setview(-xpos*dp + scrollx, ypos*dp + scrolly, zoom);
+		setview(-xpos*dp + panx, ypos*dp + pany, zoom);
 	}
 }
 
@@ -328,16 +331,20 @@ static void gr_on_mousewheel(GLFWwindow* window, double xoffset, double yoffset)
 	double xpos, ypos;
 	glfwGetCursorPos(window, &xpos, &ypos);
 
-	if (scrolling)
+	// If we're panning
+	if (panning)
 	{
-		scrollx = xmid + xpos*dp;
-		scrolly = ymid - ypos*dp;
+		// then update pan origin
+		panx = xmid + xpos*dp;
+		pany = ymid - ypos*dp;
 	}
 
+	// Calculate view position relative to cursor in world coordinates
 	double xposc = xpos*dp + xmin;
 	double yposc = ymax - ypos*dp;
 
-	setview((xmid - xposc) * a + xposc, (ymid - yposc) * a + yposc, zoom * a);
+	// Zoom relative to cursor
+	setview(a*(xmid - xposc) + xposc, a*(ymid - yposc) + yposc, zoom*a);
 }
 
 static void gr_on_resize(GLFWwindow* window, int _width, int _height)
@@ -345,9 +352,9 @@ static void gr_on_resize(GLFWwindow* window, int _width, int _height)
 	width = _width;
 	height = _height;
 
-	glViewport(0, 0, width, height);
-
 	//printf("resize %d %d\n", width, height);
+
+	glViewport(0, 0, width, height);
 
 	setview(xmid, ymid, zoom);
 }
@@ -398,7 +405,7 @@ int main(int argc, char** argv)
 
 	setview(0.0, 0.0, 0.05);
 
-	rootnode = quadtree_node_new();
+	rootnode = NULL;
 
 
 
@@ -454,9 +461,8 @@ int main(int argc, char** argv)
 
 		for (int x = xmin/gridcurr; x < xmax/gridcurr + 1; x++)
 		{
-			//int x = 0.5 + (xf / gridcurr);
 			double xf = x*gridcurr;
-			//int s = (fabs(xf - (long)(xf+0.5)) <= 0.05) ? 128 : 64;
+
 			double s = (x % gridmul3 == 0) ? 1.0           :
 			           (x % gridmul2 == 0) ? 1/3.0         :
 			           (x % gridmul  == 0) ? 1/3.0/3.0     :
@@ -475,9 +481,8 @@ int main(int argc, char** argv)
 
 		for (int y = ymin/gridcurr; y < ymax/gridcurr + 1; y++)
 		{
-			//int y = yf / gridcurr;
 			double yf = y*gridcurr;
-			//int s = (fabs(yf - (long)(yf+0.5)) <= 0.05) ? 128 : 64;
+
 			double s = (y % gridmul3 == 0) ? 1.0           :
 			           (y % gridmul2 == 0) ? 1/3.0         :
 			           (y % gridmul  == 0) ? 1/3.0/3.0     :

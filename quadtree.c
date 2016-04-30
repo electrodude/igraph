@@ -6,8 +6,6 @@ quadtree_node* quadtree_node_new(void)
 {
 	quadtree_node* node = malloc(sizeof(quadtree_node));
 
-	node->parent = NULL;
-
 	node->totalchildren = 0;
 
 	for (size_t i = 0; i < 4; i++)
@@ -39,31 +37,41 @@ void quadtree_node_kill(quadtree_node* node)
 {
 	if (node == NULL) return;
 
+	// recursively free all children
 	for (size_t i = 0; i < 4; i++)
 	{
-		quadtree_node_kill(node->children[i]);
+		quadtree_node* child = node->children[i];
+		//node->children[i] = NULL; // for the render thread's sake
+
+		quadtree_node_kill(child);
 	}
 
+	// free this node's memory
 	free(node);
 }
 
-quadtree_node* quadtree_index_force(quadtree_node* node, unsigned int i)
+
+quadtree_node* quadtree_node_get(quadtree_node** nodeptr)
 {
-	quadtree_node* child = node->children[i];
-
-	if (child == NULL)
+	// If there's nothing there
+	if (*nodeptr == NULL)
 	{
-		child = quadtree_node_new();
-		child->parent = node;
-
-		node->children[i] = child;
+		// then return a new one
+		return quadtree_node_new();
+		// The new one is inserted into the tree by quadtree_node_update,
+		//  or a simple *nodeptr = node if it's a leaf node
 	}
 
-	return child;
+	// If there was something there, return it
+	return *nodeptr;
 }
 
-void quadtree_node_update(quadtree_node* node)
+void quadtree_node_update(quadtree_node** nodeptr, quadtree_node* node)
 {
+	if (nodeptr == NULL) return;
+
+	if (node == NULL) return;
+
 	size_t totalchildren = 0;
 
 	double r = 0;
@@ -71,7 +79,7 @@ void quadtree_node_update(quadtree_node* node)
 	double b = 0;
 	double a = 0;
 
-	size_t n = 0;
+	size_t children = 0; // immediate children
 
 	for (size_t i = 0; i < 4; i++)
 	{
@@ -79,69 +87,45 @@ void quadtree_node_update(quadtree_node* node)
 
 		if (child != NULL)
 		{
-			// count the child node if it's on
+			// count the child node
 			totalchildren++;
 
 			// and all of its children
 			totalchildren += child->totalchildren;
 
-			if (child->on)
-			{
-				// average in its color
-				r += child->r;
-				g += child->g;
-				b += child->b;
-				a += child->a;
-				n++;
-			}
+			// accumulate child's color into average
+			r += child->r;
+			g += child->g;
+			b += child->b;
+			a += child->a;
+
+			children++;
 		}
 	}
 
 	node->totalchildren = totalchildren;
 
-	// if this node has any children, set its color
+	// If this node has any children, set its color
 	//  to the average of its childrens' colors
-	if (n)
+	if (children)
 	{
-		node->r = r / n;
-		node->g = g / n;
-		node->b = b / n;
-		node->a = a / n;
+		// divide average accumulators by immediate child count
+		node->r = r / children;
+		node->g = g / children;
+		node->b = b / children;
+		node->a = a / children;
 
-		node->on = NODE_CHILDON;
+		// This node has children and is here to stay,
+		//  so store it in the tree
+		*nodeptr = node;
 	}
-	else if (node->on == NODE_CHILDON)
+	// Otherwise, if this node has no children and wasn't put into the tree yet
+	else if (*nodeptr == NULL)
 	{
-		node->on = NODE_OFF;
-	}
-
-	/*
-	if (node->parent != NULL)
-	{
-		quadtree_node_update(node->parent);
-	}
-	*/
-}
-
-size_t nprune = 0;
-
-int quadtree_prune(quadtree_node* node)
-{
-	if (node == NULL) return 0;
-
-	for (size_t i = 0; i < 4; i++)
-	{
-		quadtree_node* child = node->children[i];
-		if (quadtree_prune(child))
-		{
-			quadtree_node_kill(child);
-			node->children[i] = NULL;
-
-			nprune++;
-		}
+		// then don't bother storing it; delete it
+		quadtree_node_kill(node);
 	}
 
-	quadtree_node_update(node);
-
-	return node->totalchildren == 0 && node->on == NODE_OFF;
+	// We don't need to update this node's parent since
+	//  all callers of this function do it for us
 }

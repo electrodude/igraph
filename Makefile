@@ -14,7 +14,7 @@ clean:
 igraph:		igraph.o func.o quadtree.o
 		${LD} -o $@ $^ ${LDFLAGS} 
 
-%.o:		%.c %.h
+%.o:		%.c
 		${CC} ${CFLAGS} -c -o $@ $<
 
 depend:
