@@ -274,7 +274,7 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 
 		glBegin(GL_POINTS);
 
-		glVertex2d(xm, ym);
+		//glVertex2d(xm, ym);
 	}
 }
 

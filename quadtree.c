@@ -94,11 +94,11 @@ void quadtree_node_update(quadtree_node** nodeptr, quadtree_node* node)
 			// and all of its children
 			totalchildren += child->totalchildren;
 
-			// accumulate child's color into average
-			r += child->r;
-			g += child->g;
-			b += child->b;
-			a += child->a;
+			// make r, g, b, a the max of all of its childrens' values
+			if (child->r > r) r = child->r;
+			if (child->g > g) g = child->g;
+			if (child->b > b) b = child->b;
+			if (child->a > a) a = child->a;
 
 			children++;
 		}
@@ -106,15 +106,15 @@ void quadtree_node_update(quadtree_node** nodeptr, quadtree_node* node)
 
 	node->totalchildren = totalchildren;
 
-	// If this node has any children, set its color
-	//  to the average of its childrens' colors
+	// If this node has any children
 	if (children)
 	{
-		// divide average accumulators by immediate child count
-		node->r = r / children;
-		node->g = g / children;
-		node->b = b / children;
-		node->a = a / children;
+		// then set each component of its color to the maximum value
+		//  of that component that any of its children had
+		node->r = r;
+		node->g = g;
+		node->b = b;
+		node->a = a;
 
 		// This node has children and is here to stay,
 		//  so store it in the tree
