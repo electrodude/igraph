@@ -18,6 +18,7 @@ quadtree_node* quadtree_node_new(void)
 	node->b = 0.0;
 	node->a = 0.0;
 
+
 	return node;
 }
 

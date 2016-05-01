@@ -1,6 +1,6 @@
 # igraph
 
-Implicit equation solver in C, using a quadtree to store points and a binary (well, actually quaternary) search to find points.
+Implicit equation grapher in C, using a 2d binary search to find points on the graph and a quadtree to store them.
 
 Works well, but is still nowhere near complete.  For example, the equation is currently hardcoded in `func.c`.
 
@@ -40,6 +40,7 @@ For a visualization of the quadtree, open `igraph.c`, find the only occurrence o
   * maybe go more shallow while moving, and then do a full-quality search when not moving or when moving slowly
 * Drop data from the tree to keep it from getting too big
   * This hasn't been a problem for me yet.
+* Improve branch node color averaging - it looks bad when you zoom out, especially with `SHOW_SIGN` on
 
 
 This doesn't segfault on my machine with no mutexes and `-O3`.  Please file a bug if it segfaults for you.

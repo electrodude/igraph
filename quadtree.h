@@ -12,6 +12,7 @@ typedef struct quadtree_node
 	double b;
 	double a;
 
+
 } quadtree_node;
 
 

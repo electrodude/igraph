@@ -14,6 +14,9 @@
 
 #include "func.h"
 
+#define SHOW_TREE 0
+#define SHOW_SIGN 0
+
 
 GLFWwindow* gr_window;
 
@@ -43,8 +46,8 @@ volatile double ymax;
 
 volatile double dp;
 
-double mindetail = 4.0;
-double maxdetail = 1.0;
+volatile double mindetail = 4.0;
+volatile double maxdetail = 1.0;
 
 
 quadtree_node* rootnode;
@@ -52,7 +55,7 @@ quadtree_node* rootnode;
 pthread_t thread;
 
 
-void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, double yh)
+void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, double yh, int pperm)
 {
 	//printf("quadtree_search %g %g %g %g\n", xh, xl, yh, yl);
 
@@ -66,14 +69,19 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 
 	//printf("%d %d %d %d\n", xlp, xhp, ylp, yhp);
 
-	double bls = func(xl, yl) > 0;
-	double brs = func(xh, yl) > 0;
-	double tls = func(xl, yh) > 0;
-	double trs = func(xh, yh) > 0;
+	double bl = func(xl, yl);
+	double bls = bl > 0;
+	double br = func(xh, yl);
+	double brs = br  > 0;
+	double tl = func(xl, yh);
+	double tls = tl  > 0;
+	double tr = func(xh, yh);
+	double trs = tr  > 0;
 
 	int on = bls != brs || tls != trs || bls != tls || brs != trs;
 
-	if (on)
+	// If the graph intersects this node and this is a new node
+	if (on && *nodeptr == NULL)
 	{
 		// If this node is smaller than maxdetail pixels
 		if (xh - xl < dp*maxdetail && yh - yl < dp*maxdetail)
@@ -114,16 +122,45 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 		// get node
 		quadtree_node* node = quadtree_node_get(nodeptr);
 
-		node->a /= 2.0; // show what it's working on
+		node->a = 0.1;
+#if SHOW_SIGN
+		node->r = 0.0;
+		node->g = 0.0;
+		node->b = 0.0;
+
+		     if (on    ) { node->r = 1.0; node->g = 1.0; node->b = 1.0; }
+
+		else if (bl > 0) node->b = 1.0;
+		else if (bl < 0) node->r = 1.0;
+
+		else if (tr > 0) node->b = 1.0;
+		else if (tr < 0) node->r = 1.0;
+
+		else if (tl > 0) node->b = 1.0;
+		else if (tl < 0) node->r = 1.0;
+
+		else if (br > 0) node->b = 1.0;
+		else if (br < 0) node->r = 1.0;
+
+		else             node->g = 1.0;
+
+
+		if (pperm)
+		{
+			*nodeptr = node;
+		}
+#endif
+
+		int pperm2 = node == *nodeptr && node->totalchildren;
 
 		// recursively search each child
-		quadtree_search(&node->children[0], xl, xm, yl, ym);
+		quadtree_search(&node->children[0], xl, xm, yl, ym, pperm2);
 
-		quadtree_search(&node->children[1], xm, xh, yl, ym);
+		quadtree_search(&node->children[1], xm, xh, yl, ym, pperm2);
 
-		quadtree_search(&node->children[2], xl, xm, ym, yh);
+		quadtree_search(&node->children[2], xl, xm, ym, yh, pperm2);
 
-		quadtree_search(&node->children[3], xm, xh, ym, yh);
+		quadtree_search(&node->children[3], xm, xh, ym, yh, pperm2);
 
 		// put node in tree, update it, or delete it as appropriate
 		quadtree_node_update(nodeptr, node);
@@ -137,7 +174,7 @@ void* calc(void* param)
 
 	while (1)
 	{
-		quadtree_search(&rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20));
+		quadtree_search(&rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20), 1);
 		printf("nodes: %ld\n", rootnode != NULL ? rootnode->totalchildren + 1 : 0);
 
 		glfwPostEmptyEvent();
@@ -165,24 +202,6 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 	double xm = 0.5*xh + 0.5*xl;
 	double ym = 0.5*yh + 0.5*yl;
 
-#if 0
-	glEnd();
-
-	glColor4d(0.0, 0.0, 1.0, 0.5);
-
-	glBegin(GL_LINES);
-
-	glVertex2d(xl, ym);
-	glVertex2d(xh, ym);
-
-	glVertex2d(xm, yl);
-	glVertex2d(xm, yh);
-
-	glEnd();
-
-	glBegin(GL_POINTS);
-#endif
-
 	// If the node fits entirely on the screen
 	if (xl >= xmin && xh <= xmax && yl >= ymin && yh <= ymax)
 	{
@@ -197,7 +216,7 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 		if ((xhp == xlp && yhp == ylp) || (xh - xl <= dp && yh - yl <= dp))
 		{
 			// then we're done; draw this node
-			glColor4d(node->r, node->g, node->b, node->a);
+			glColor4dv(&node->r);
 			glVertex2d(xm, ym);
 			return;
 		}
@@ -206,6 +225,24 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 	// If this node has any children
 	if (node->totalchildren)
 	{
+#if SHOW_TREE
+		glEnd();
+
+		glColor4d(0.0, 0.0, 1.0, 0.5);
+
+		glBegin(GL_LINES);
+
+		glVertex2d(xl, ym);
+		glVertex2d(xh, ym);
+
+		glVertex2d(xm, yl);
+		glVertex2d(xm, yh);
+
+		glEnd();
+
+		glBegin(GL_POINTS);
+#endif
+
 		// then recurse for all of its children
 		quadtree_node* bl = node->children[0];
 		quadtree_render(bl, xl, xm, yl, ym);
@@ -224,7 +261,7 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 		// otherwise, just draw this node
 		glEnd();
 
-		glColor4d(node->r, node->g, node->b, node->a);
+		glColor4dv(&node->r);
 
 		glBegin(GL_QUADS);
 
