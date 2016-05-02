@@ -70,13 +70,13 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 	//printf("%d %d %d %d\n", xlp, xhp, ylp, yhp);
 
 	double bl = func(xl, yl);
-	double bls = bl > 0;
+	int bls = bl > 0;
 	double br = func(xh, yl);
-	double brs = br  > 0;
+	int brs = br  > 0;
 	double tl = func(xl, yh);
-	double tls = tl  > 0;
+	int tls = tl  > 0;
 	double tr = func(xh, yh);
-	double trs = tr  > 0;
+	int trs = tr  > 0;
 
 	int on = bls != brs || tls != trs || bls != tls || brs != trs;
 
