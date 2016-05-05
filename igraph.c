@@ -49,10 +49,14 @@ volatile double dp;
 volatile double mindetail = 4.0;
 volatile double maxdetail = 1.0;
 
+volatile int currgen;
+int searchgen;
 
 quadtree_node* rootnode;
 
 pthread_t thread;
+pthread_mutex_t triggermutex;
+pthread_cond_t trigger;
 
 
 void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, double yh, int pperm)
@@ -174,10 +178,17 @@ void* calc(void* param)
 
 	while (1)
 	{
+		printf("calc\n");
+		searchgen = currgen;
 		quadtree_search(&rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20), 1);
 		printf("nodes: %ld\n", rootnode != NULL ? rootnode->totalchildren + 1 : 0);
 
 		glfwPostEmptyEvent();
+
+		if (searchgen == currgen)
+		{
+			pthread_cond_wait(&trigger, &triggermutex);
+		}
 	}
 
 	glfwPostEmptyEvent();
@@ -315,6 +326,9 @@ void setview(double _xmid, double _ymid, double _zoom)
 	}
 
 	//printf("gridcurr: %f\n", gridcurr);
+
+	currgen++;
+	pthread_cond_signal(&trigger);
 }
 
 
@@ -445,6 +459,20 @@ int main(int argc, char** argv)
 	rootnode = NULL;
 
 
+	pthread_mutexattr_t mutexattr;
+	pthread_mutexattr_init(&mutexattr);
+
+	pthread_mutex_init(&triggermutex, &mutexattr);
+	pthread_mutexattr_destroy(&mutexattr);
+
+
+	pthread_condattr_t condattr;
+	pthread_condattr_init(&condattr);
+
+	pthread_cond_init(&trigger, &condattr);
+
+	pthread_condattr_destroy(&condattr);
+
 
 	pthread_attr_t threadattr;
 	pthread_attr_init(&threadattr);
@@ -456,6 +484,9 @@ int main(int argc, char** argv)
 		perror("pthread_create");
 		exit(-1);
 	}
+
+	pthread_attr_destroy(&threadattr);
+
 
 	while (!glfwWindowShouldClose(gr_window))
 	{
