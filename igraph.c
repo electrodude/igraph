@@ -34,6 +34,8 @@ int gridmul3;
 double xmid;
 double ymid;
 double zoom;
+double zoomtarget;
+double zoomstep;
 
 int panning = 0;
 double panx;
@@ -379,23 +381,9 @@ static void gr_on_mousewheel(GLFWwindow* window, double xoffset, double yoffset)
 
 	double a = (yoffset < 0) ? zoomspeed : 1.0/zoomspeed;
 
-	double xpos, ypos;
-	glfwGetCursorPos(window, &xpos, &ypos);
+	zoomtarget = zoomtarget * a;
 
-	// If we're panning
-	if (panning)
-	{
-		// then update pan origin
-		panx = xmid + xpos*dp;
-		pany = ymid - ypos*dp;
-	}
-
-	// Calculate view position relative to cursor in world coordinates
-	double xposc = xpos*dp + xmin;
-	double yposc = ymax - ypos*dp;
-
-	// Zoom relative to cursor
-	setview(a*(xmid - xposc) + xposc, a*(ymid - yposc) + yposc, zoom*a);
+	zoomstep = (zoomtarget - zoom) / 4.0;
 }
 
 static void gr_on_resize(GLFWwindow* window, int _width, int _height)
@@ -453,8 +441,9 @@ int main(int argc, char** argv)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-
 	setview(0.0, 0.0, 0.05);
+
+	zoomtarget = zoom;
 
 	rootnode = NULL;
 
@@ -594,7 +583,37 @@ int main(int argc, char** argv)
 
 		glfwSwapBuffers(gr_window);
 
-		glfwWaitEvents();
+		int anim = 0;
+
+		if ((zoom < zoomtarget ? zoom / zoomtarget : zoomtarget / zoom) < 0.9)
+		{
+			anim = 1;
+
+			double newzoom = zoom + zoomstep;
+
+			double a = newzoom / zoom;
+
+			double xpos, ypos;
+			glfwGetCursorPos(gr_window, &xpos, &ypos);
+
+			// Calculate view position relative to cursor in world coordinates
+			double xposc = xpos*dp + xmin;
+			double yposc = ymax - ypos*dp;
+
+			// Zoom relative to cursor
+			setview(a*(xmid - xposc) + xposc, a*(ymid - yposc) + yposc, newzoom);
+
+			zoomstep *= 0.9;
+		}
+
+		if (anim)
+		{
+			glfwPollEvents();
+		}
+		else
+		{
+			glfwWaitEvents();
+		}
 	}
 
 	glfwDestroyWindow(gr_window);
