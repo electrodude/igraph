@@ -1,9 +1,8 @@
-CFLAGS=-O3
-#CFLAGS=-Og -g
-CFLAGS+=-std=c99 -Wextra -pthread
+CFLAGS=-O2
+#CFLAGS=-O0 -g
+CFLAGS+=-std=c99 -Wextra -pthread -funsafe-math-optimizations
 LDFLAGS=-lglfw -lX11 -lXrandr -lXi -lXxf86vm -lm -lGL -lGLU -pthread
 CC=gcc
-CXX=g++
 LD=gcc
 
 all:		igraph
