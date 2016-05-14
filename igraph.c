@@ -37,6 +37,10 @@ double zoom;
 double zoomtarget;
 double zoomstep;
 
+double glscl;
+
+#define glVertex2d_xfrm(x, y) glVertex2d((x - xmid)*glscl, (y - ymid)*glscl)
+
 int panning = 0;
 double panx;
 double pany;
@@ -122,8 +126,10 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 
 	if (recurse)
 	{
-		double xm = 0.5*xh + 0.5*xl;
-		double ym = 0.5*yh + 0.5*yl;
+		double xm = 0.5*(xh + xl);
+		double ym = 0.5*(yh + yl);
+
+		if (xl == xm || xm == xh || yl == ym || ym == yh) return;
 
 		// get node
 		quadtree_node* node = quadtree_node_get(nodeptr);
@@ -212,44 +218,34 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 		return;
 	}
 
-	double xm = 0.5*xh + 0.5*xl;
-	double ym = 0.5*yh + 0.5*yl;
+	double xm = 0.5*(xh + xl);
+	double ym = 0.5*(yh + yl);
 
-	// If the node fits entirely on the screen
-	if (xl >= xmin && xh <= xmax && yl >= ymin && yh <= ymax)
+	if (xl == xm || xm == xh || yl == ym || ym == yh) return;
+
+	// If this node is smaller than one pixel
+	if (xh - xl <= dp && yh - yl <= dp)
 	{
-		// figure out where on the screen it is
-		int xhp = (xh-xmin) / dp;
-		int xlp = (xl-xmin) / dp;
-
-		int yhp = (yh-ymin) / dp;
-		int ylp = (yl-ymin) / dp;
-
-		// If this node is entirely inside a single pixel, or smaller than one pixel
-		if ((xhp == xlp && yhp == ylp) || (xh - xl <= dp && yh - yl <= dp))
-		{
-			// then we're done; draw this node
-			glColor4dv(&node->r);
-			glVertex2d(xm, ym);
-			return;
-		}
+		// then we're done; draw this node as a pixel
+		glColor4dv(&node->r);
+		glVertex2d_xfrm(xm, ym);
 	}
-
-	// If this node has any children
-	if (node->totalchildren)
+	// Otherwise, if this node has any children
+	else if (node->totalchildren)
 	{
 #if SHOW_TREE
+		// (if SHOW_TREE, then draw quadtree cross)
 		glEnd();
 
 		glColor4d(0.0, 0.0, 1.0, 0.5);
 
 		glBegin(GL_LINES);
 
-		glVertex2d(xl, ym);
-		glVertex2d(xh, ym);
+		glVertex2d_xfrm(xl, ym);
+		glVertex2d_xfrm(xh, ym);
 
-		glVertex2d(xm, yl);
-		glVertex2d(xm, yh);
+		glVertex2d_xfrm(xm, yl);
+		glVertex2d_xfrm(xm, yh);
 
 		glEnd();
 
@@ -271,23 +267,23 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 	}
 	else
 	{
-		// otherwise, just draw this node
+		// Otherwise, just draw this node
 		glEnd();
 
 		glColor4dv(&node->r);
 
 		glBegin(GL_QUADS);
 
-		glVertex2d(xl, yl);
-		glVertex2d(xh, yl);
-		glVertex2d(xh, yh);
-		glVertex2d(xl, yh);
+		glVertex2d_xfrm(xl, yl);
+		glVertex2d_xfrm(xh, yl);
+		glVertex2d_xfrm(xh, yh);
+		glVertex2d_xfrm(xl, yh);
 
 		glEnd();
 
 		glBegin(GL_POINTS);
 
-		//glVertex2d(xm, ym);
+		//glVertex2d_xfrm(xm, ym);
 	}
 }
 
@@ -308,6 +304,8 @@ void setview(double _xmid, double _ymid, double _zoom)
 	double halfwidth  = width  * 0.5;
 
 	dp = zoom;
+
+	glscl = 1.0 / height / zoom;
 
 	xmin = xmid - halfwidth *dp;
 	xmax = xmid + halfwidth *dp;
@@ -487,19 +485,10 @@ int main(int argc, char** argv)
 
 		double aspect = width/(double)height;
 
-		double xscl = 1;
-		double yscl = 1;
+		double xscl = 0.5 * aspect;
+		double yscl = 0.5;
 
-		if (aspect > 1)
-		{
-			xscl *= aspect;
-		}
-		else if (aspect < 1)
-		{
-			yscl /= aspect;
-		}
-
-		glOrtho(xmin, xmax, ymin, ymax, -1.0, 1.0);
+		glOrtho(-xscl, xscl, -yscl, yscl, -1.0, 1.0);
 
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -516,7 +505,7 @@ int main(int argc, char** argv)
 
 		glBegin(GL_LINES);
 
-		for (int x = xmin/gridcurr; x < xmax/gridcurr + 1; x++)
+		for (long x = xmin/gridcurr; x < xmax/gridcurr + 1; x++)
 		{
 			double xf = x*gridcurr;
 
@@ -532,11 +521,11 @@ int main(int argc, char** argv)
 
 			glColor4d(r, g, b, a);
 
-			glVertex2d(xf, ymin);
-			glVertex2d(xf, ymax);
+			glVertex2d_xfrm(xf, ymin);
+			glVertex2d_xfrm(xf, ymax);
 		}
 
-		for (int y = ymin/gridcurr; y < ymax/gridcurr + 1; y++)
+		for (long y = ymin/gridcurr; y < ymax/gridcurr + 1; y++)
 		{
 			double yf = y*gridcurr;
 
@@ -552,19 +541,19 @@ int main(int argc, char** argv)
 
 			glColor4d(r, g, b, a);
 
-			glVertex2d(xmin, yf);
-			glVertex2d(xmax, yf);
+			glVertex2d_xfrm(xmin, yf);
+			glVertex2d_xfrm(xmax, yf);
 		}
 
 		glColor4ub(255,   0,   0, 255);
 
-		glVertex2d(0.0, ymin);
-		glVertex2d(0.0, ymax);
+		glVertex2d_xfrm(0.0, ymin);
+		glVertex2d_xfrm(0.0, ymax);
 
 		glColor4ub(  0, 255,   0, 255);
 
-		glVertex2d(xmin, 0.0);
-		glVertex2d(xmax, 0.0);
+		glVertex2d_xfrm(xmin, 0.0);
+		glVertex2d_xfrm(xmax, 0.0);
 
 		glEnd();
 
