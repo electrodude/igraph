@@ -15,7 +15,7 @@
 #include "func.h"
 
 #define SHOW_TREE 0
-#define SHOW_SIGN 0
+#define SHOW_SIGN 1
 
 
 GLFWwindow* gr_window;
@@ -80,13 +80,13 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 	//printf("%d %d %d %d\n", xlp, xhp, ylp, yhp);
 
 	double bl = func(xl, yl);
-	int bls = bl > 0;
+	int bls = bl > 0 ? 1 : bl < 0 ? -1 : 0;
 	double br = func(xh, yl);
-	int brs = br  > 0;
+	int brs = br > 0 ? 1 : br < 0 ? -1 : 0;
 	double tl = func(xl, yh);
-	int tls = tl  > 0;
+	int tls = tl > 0 ? 1 : tl < 0 ? -1 : 0;
 	double tr = func(xh, yh);
-	int trs = tr  > 0;
+	int trs = tr > 0 ? 1 : tr < 0 ? -1 : 0;
 
 	int on = bls != brs || tls != trs || bls != tls || brs != trs;
 
