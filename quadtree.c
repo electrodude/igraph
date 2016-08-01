@@ -2,9 +2,9 @@
 
 #include "quadtree.h"
 
-quadtree_node* quadtree_node_new(void)
+quadtree_node *quadtree_node_new(void)
 {
-	quadtree_node* node = malloc(sizeof(quadtree_node));
+	quadtree_node *node = malloc(sizeof(quadtree_node));
 
 	node->totalchildren = 0;
 
@@ -22,9 +22,9 @@ quadtree_node* quadtree_node_new(void)
 	return node;
 }
 
-quadtree_node* quadtree_node_new_c(double r, double g, double b, double a)
+quadtree_node *quadtree_node_new_c(double r, double g, double b, double a)
 {
-	quadtree_node* node = quadtree_node_new();
+	quadtree_node *node = quadtree_node_new();
 
 	node->r = r;
 	node->g = g;
@@ -34,14 +34,14 @@ quadtree_node* quadtree_node_new_c(double r, double g, double b, double a)
 	return node;
 }
 
-void quadtree_node_kill(quadtree_node* node)
+void quadtree_node_kill(quadtree_node *node)
 {
 	if (node == NULL) return;
 
 	// recursively free all children
 	for (size_t i = 0; i < 4; i++)
 	{
-		quadtree_node* child = node->children[i];
+		quadtree_node *child = node->children[i];
 		//node->children[i] = NULL; // for the render thread's sake
 
 		quadtree_node_kill(child);
@@ -52,7 +52,7 @@ void quadtree_node_kill(quadtree_node* node)
 }
 
 
-quadtree_node* quadtree_node_get(quadtree_node** nodeptr)
+quadtree_node *quadtree_node_get(quadtree_node **nodeptr)
 {
 	// If there's nothing there
 	if (*nodeptr == NULL)
@@ -67,7 +67,7 @@ quadtree_node* quadtree_node_get(quadtree_node** nodeptr)
 	return *nodeptr;
 }
 
-void quadtree_node_update(quadtree_node** nodeptr, quadtree_node* node)
+void quadtree_node_update(quadtree_node **nodeptr, quadtree_node *node)
 {
 	if (nodeptr == NULL) return;
 
@@ -84,7 +84,7 @@ void quadtree_node_update(quadtree_node** nodeptr, quadtree_node* node)
 
 	for (size_t i = 0; i < 4; i++)
 	{
-		quadtree_node* child = node->children[i];
+		quadtree_node *child = node->children[i];
 
 		if (child != NULL)
 		{

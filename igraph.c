@@ -18,7 +18,7 @@
 #define SHOW_SIGN 1
 
 
-GLFWwindow* gr_window;
+GLFWwindow *gr_window;
 
 int width = 640;
 int height = 400;
@@ -58,14 +58,14 @@ volatile double maxdetail = 1.0;
 volatile int currgen;
 int searchgen;
 
-quadtree_node* rootnode;
+quadtree_node *rootnode;
 
 pthread_t thread;
 pthread_mutex_t triggermutex;
 pthread_cond_t trigger;
 
 
-void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, double yh, int pperm)
+void quadtree_search(quadtree_node **nodeptr, double xl, double xh, double yl, double yh, int pperm)
 {
 	//printf("quadtree_search %g %g %g %g\n", xh, xl, yh, yl);
 
@@ -98,7 +98,7 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 		{
 			// then make a leaf node
 			//printf("quadtree_search %g %g %g %g\n", xh, xl, yh, yl);
-			quadtree_node* node = quadtree_node_get(nodeptr);
+			quadtree_node *node = quadtree_node_get(nodeptr);
 			node->r = 1.0;
 			node->g = 1.0;
 			node->b = 1.0;
@@ -132,7 +132,7 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 		if (xl == xm || xm == xh || yl == ym || ym == yh) return;
 
 		// get node
-		quadtree_node* node = quadtree_node_get(nodeptr);
+		quadtree_node *node = quadtree_node_get(nodeptr);
 
 		node->a = 0.1;
 #if SHOW_SIGN
@@ -180,7 +180,7 @@ void quadtree_search(quadtree_node** nodeptr, double xl, double xh, double yl, d
 
 }
 
-void* calc(void* param)
+void *calc(void *param)
 {
 	prctl(PR_SET_NAME, "graph");
 
@@ -206,7 +206,7 @@ void* calc(void* param)
 
 
 
-void quadtree_render(const quadtree_node* node, double xl, double xh, double yl, double yh)
+void quadtree_render(const quadtree_node *node, double xl, double xh, double yl, double yh)
 {
 	//printf("quadtree_render %g %g %g %g\n", xh, xl, yh, yl);
 	if (node == NULL) return;
@@ -253,16 +253,16 @@ void quadtree_render(const quadtree_node* node, double xl, double xh, double yl,
 #endif
 
 		// then recurse for all of its children
-		quadtree_node* bl = node->children[0];
+		quadtree_node *bl = node->children[0];
 		quadtree_render(bl, xl, xm, yl, ym);
 
-		quadtree_node* br = node->children[1];
+		quadtree_node *br = node->children[1];
 		quadtree_render(br, xm, xh, yl, ym);
 
-		quadtree_node* tl = node->children[2];
+		quadtree_node *tl = node->children[2];
 		quadtree_render(tl, xl, xm, ym, yh);
 
-		quadtree_node* tr = node->children[3];
+		quadtree_node *tr = node->children[3];
 		quadtree_render(tr, xm, xh, ym, yh);
 	}
 	else
@@ -332,12 +332,12 @@ void setview(double _xmid, double _ymid, double _zoom)
 }
 
 
-static void gr_error_callback(int error, const char* description)
+static void gr_error_callback(int error, const char *description)
 {
 	fputs(description, stderr);
 }
 
-static void gr_on_mousebutton(GLFWwindow* window, int button, int action, int mods)
+static void gr_on_mousebutton(GLFWwindow *window, int button, int action, int mods)
 {
 	//printf("mousebutton %d %d %d\n", button, action, mods);
 
@@ -363,7 +363,7 @@ static void gr_on_mousebutton(GLFWwindow* window, int button, int action, int mo
 
 }
 
-static void gr_on_mousemove(GLFWwindow* window, double xpos, double ypos)
+static void gr_on_mousemove(GLFWwindow *window, double xpos, double ypos)
 {
 	//printf("mouse %f %f\n", xpos, ypos);
 
@@ -373,7 +373,7 @@ static void gr_on_mousemove(GLFWwindow* window, double xpos, double ypos)
 	}
 }
 
-static void gr_on_mousewheel(GLFWwindow* window, double xoffset, double yoffset)
+static void gr_on_mousewheel(GLFWwindow *window, double xoffset, double yoffset)
 {
 	//printf("mousescroll %f %f\n", xoffset, yoffset);
 
@@ -384,7 +384,7 @@ static void gr_on_mousewheel(GLFWwindow* window, double xoffset, double yoffset)
 	zoomstep = (zoomtarget - zoom) / 4.0;
 }
 
-static void gr_on_resize(GLFWwindow* window, int _width, int _height)
+static void gr_on_resize(GLFWwindow *window, int _width, int _height)
 {
 	width = _width;
 	height = _height;
@@ -397,7 +397,7 @@ static void gr_on_resize(GLFWwindow* window, int _width, int _height)
 }
 
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
 	glfwSetErrorCallback(gr_error_callback);
 
@@ -427,7 +427,7 @@ int main(int argc, char** argv)
 	glfwSetFramebufferSizeCallback(gr_window, gr_on_resize);
 
 
-	GLFWcursor* cursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
+	GLFWcursor *cursor = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
 
 	glfwSetCursor(gr_window, cursor);
 
