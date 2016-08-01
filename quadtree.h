@@ -5,6 +5,8 @@ typedef struct quadtree_node
 {
 	struct quadtree_node *children[4];
 
+	// We probably can't have a parent pointer, due to thread safety reasons
+
 	size_t totalchildren;
 
 	double r;

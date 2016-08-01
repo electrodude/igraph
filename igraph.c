@@ -15,6 +15,8 @@
 
 #include "func.h"
 
+#define DEBUG 1
+
 #define SHOW_TREE 0
 #define SHOW_SIGN 1
 
@@ -64,6 +66,9 @@ quadtree_node *rootnode;
 pthread_t thread;
 pthread_mutex_t triggermutex;
 pthread_cond_t trigger;
+
+
+int quit = 0;
 
 
 void quadtree_search(quadtree_node **nodeptr, double xl, double xh, double yl, double yh, int pperm)
@@ -183,9 +188,9 @@ void quadtree_search(quadtree_node **nodeptr, double xl, double xh, double yl, d
 
 void *calc(void *param)
 {
-	prctl(PR_SET_NAME, "graph");
+	prctl(PR_SET_NAME, "calc");
 
-	while (1)
+	while (!quit)
 	{
 		printf("calc\n");
 		clock_t starttime = clock();
@@ -202,6 +207,12 @@ void *calc(void *param)
 			pthread_cond_wait(&trigger, &triggermutex);
 		}
 	}
+
+#if DEBUG
+	printf("calc quitting!\n");
+#endif
+
+	quadtree_node_kill(rootnode);
 
 	glfwPostEmptyEvent();
 
@@ -478,6 +489,7 @@ int main(int argc, char **argv)
 
 	pthread_attr_destroy(&threadattr);
 
+	pthread_cond_signal(&trigger);
 
 	while (!glfwWindowShouldClose(gr_window))
 	{
@@ -608,6 +620,9 @@ int main(int argc, char **argv)
 			glfwWaitEvents();
 		}
 	}
+
+	quit = 1;
+	pthread_cond_signal(&trigger);
 
 	glfwDestroyWindow(gr_window);
 
