@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/prctl.h>
+#include <time.h>
 #include <errno.h>
 
 #include <math.h>
@@ -187,9 +188,12 @@ void *calc(void *param)
 	while (1)
 	{
 		printf("calc\n");
+		clock_t starttime = clock();
 		searchgen = currgen;
 		quadtree_search(&rootnode, -pow(2, 20), pow(2, 20), -pow(2, 20), pow(2, 20), 1);
+		clock_t diff = clock() - starttime;
 		printf("nodes: %ld\n", rootnode != NULL ? rootnode->totalchildren + 1 : 0);
+		printf("time: %gs\n", diff / (double)CLOCKS_PER_SEC);
 
 		glfwPostEmptyEvent();
 
